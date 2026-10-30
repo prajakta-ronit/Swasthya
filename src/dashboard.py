@@ -71,7 +71,7 @@ def apply_dashboard_style():
     )
 
 
-def show_dashboard_header():
+def show_dashboard_header(ai_enabled: bool = True):
     """Display the dashboard heading."""
 
     st.markdown(
@@ -79,10 +79,13 @@ def show_dashboard_header():
         unsafe_allow_html=True,
     )
 
+    subtitle = (
+        "AI-Powered Medical Report Analysis & Health Insights"
+        if ai_enabled
+        else "Medical Report Analysis & Health Insights"
+    )
     st.markdown(
-        '<div class="dashboard-subtitle">'
-        'AI-Powered Medical Report Analysis & Health Insights'
-        '</div>',
+        f'<div class="dashboard-subtitle">{subtitle}</div>',
         unsafe_allow_html=True,
     )
 

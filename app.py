@@ -38,7 +38,7 @@ except StreamlitSecretNotFoundError:
     AI_ENABLED = True
 
 apply_dashboard_style()
-show_dashboard_header()
+show_dashboard_header(AI_ENABLED)
 
 pages = ["Overview", "Report Analysis", "Report Comparison"]
 if AI_ENABLED:
