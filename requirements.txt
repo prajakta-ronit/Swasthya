@@ -3,3 +3,7 @@ pymupdf
 pandas
 pillow
 python-dotenv
+ollama
+pytesseract
+plotly
+reportlab
