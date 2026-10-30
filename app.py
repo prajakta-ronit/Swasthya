@@ -226,6 +226,10 @@ if page == "Overview":
 
 elif page == "Report Analysis":
     st.subheader("🧪 Report Analysis")
+    st.caption(
+        "Upload a lab report to extract supported measurements, review the "
+        "results, and download a copy for your records."
+    )
     upload = st.file_uploader("Upload a laboratory report", type=["pdf", "png", "jpg", "jpeg"], key="analysis_upload")
     if upload:
         sig = signature(upload)
@@ -277,7 +281,10 @@ elif page == "Report Analysis":
 
 elif page == "Report Comparison":
     st.subheader("📊 Medical Report Comparison")
-    st.write("Upload reports from two dates. Units must be compatible for a numeric comparison.")
+    st.caption(
+        "See how extracted measurements differ between two reports. "
+        "Units must be compatible for a numeric comparison."
+    )
     old_upload = st.file_uploader("Previous report", type=["pdf", "png", "jpg", "jpeg"], key="old_upload")
     new_upload = st.file_uploader("Current report", type=["pdf", "png", "jpg", "jpeg"], key="new_upload")
     d1, d2 = st.columns(2)
@@ -310,6 +317,10 @@ elif page == "Report Comparison":
 
 elif page == "AI Assistant" and AI_ENABLED:
     st.subheader("💬 Chat with Your Medical Report")
+    st.caption(
+        "Ask questions about values extracted from your latest report. "
+        "Responses are educational and are not a medical diagnosis."
+    )
     df = st.session_state.analysis_measurements
     if df.empty:
         st.info("First upload a report in Report Analysis.")

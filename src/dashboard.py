@@ -4,67 +4,214 @@ import plotly.express as px
 
 
 def apply_dashboard_style():
-    """Apply a professional visual theme to SWASTHYA AI."""
+    """Apply a polished, responsive visual theme to SWASTHYA AI."""
 
     st.markdown(
         """
         <style>
+        :root {
+            --sw-primary: #087e8b;
+            --sw-primary-dark: #075b66;
+            --sw-ink: #14324b;
+            --sw-muted: #607789;
+            --sw-border: #dce8ed;
+            --sw-surface: #ffffff;
+        }
+
         .stApp {
-            background-color: #f5f8fc;
+            background:
+                radial-gradient(ellipse at 75% 0%, rgba(221, 242, 240, 0.62), transparent 34rem),
+                #f4f8fa;
+            color: var(--sw-ink);
         }
 
         [data-testid="stSidebar"] {
-            background-color: #eaf2fb;
-            border-right: 1px solid #d8e4f0;
+            background: linear-gradient(180deg, #edf6f6 0%, #f3f7fa 100%);
+            border-right: 1px solid var(--sw-border);
+        }
+
+        [data-testid="stSidebar"] > div:first-child {
+            padding-top: 1.4rem;
         }
 
         .block-container {
-            padding-top: 1.8rem;
-            padding-bottom: 2rem;
-            max-width: 1450px;
+            padding-top: 2rem;
+            padding-bottom: 3rem;
+            max-width: 1320px;
         }
 
         .dashboard-title {
-            font-size: 2.35rem;
-            font-weight: 750;
-            color: #153e66;
-            margin-bottom: 0.2rem;
+            font-size: clamp(1.7rem, 3vw, 2.35rem);
+            font-weight: 800;
+            letter-spacing: -0.045em;
+            color: var(--sw-ink);
+            margin-bottom: 0.3rem;
         }
 
         .dashboard-subtitle {
-            color: #61758a;
+            color: var(--sw-muted);
             font-size: 1rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.8rem;
+        }
+
+        .dashboard-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.7rem;
+            border: 1px solid #cce5e2;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            color: var(--sw-primary-dark);
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.7rem;
         }
 
         .section-heading {
-            color: #153e66;
-            font-size: 1.35rem;
-            font-weight: 650;
-            margin-top: 1rem;
-            margin-bottom: 0.8rem;
+            color: var(--sw-ink);
+            font-size: 1.4rem;
+            font-weight: 750;
+            letter-spacing: -0.025em;
+            margin-top: 1.2rem;
+            margin-bottom: 1rem;
         }
 
         div[data-testid="stMetric"] {
-            background-color: white;
-            border: 1px solid #dce7f2;
-            padding: 1rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(21, 62, 102, 0.05);
+            background: var(--sw-surface);
+            border: 1px solid var(--sw-border);
+            padding: 1.15rem 1.25rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(20, 50, 75, 0.045);
+            transition: transform 160ms ease, box-shadow 160ms ease;
+        }
+
+        div[data-testid="stMetric"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(20, 50, 75, 0.08);
         }
 
         div[data-testid="stMetricLabel"] {
-            color: #61758a;
+            color: var(--sw-muted);
+            font-weight: 600;
         }
 
         div[data-testid="stMetricValue"] {
-            color: #153e66;
+            color: var(--sw-ink);
+            font-weight: 750;
         }
 
         div[data-testid="stAlert"] {
-            border-radius: 10px;
+            border-radius: 14px;
+            border: 1px solid var(--sw-border);
         }
 
+        [data-testid="stSidebar"] [role="radiogroup"] label {
+            border-radius: 10px;
+            transition: background-color 140ms ease;
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+            background: rgba(8, 126, 139, 0.08);
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+            background: rgba(8, 126, 139, 0.12);
+        }
+
+        [data-testid="stFileUploader"] section {
+            border: 1px dashed #9bbdc4;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        [data-testid="stFileUploader"] section:hover {
+            border-color: var(--sw-primary);
+            background: #f7fcfc;
+        }
+
+        .stButton > button,
+        .stDownloadButton > button {
+            min-height: 2.7rem;
+            border-radius: 10px;
+            font-weight: 650;
+            transition: transform 140ms ease, box-shadow 140ms ease;
+        }
+
+        .stButton > button[kind="primary"] {
+            border-color: var(--sw-primary);
+            background: var(--sw-primary);
+        }
+
+        .stButton > button:hover,
+        .stDownloadButton > button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 14px rgba(8, 126, 139, 0.14);
+        }
+
+        [data-testid="stDataFrame"],
+        [data-testid="stTable"] {
+            border: 1px solid var(--sw-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .overview-empty {
+            padding: clamp(1.2rem, 3vw, 2rem);
+            border: 1px solid var(--sw-border);
+            border-radius: 18px;
+            background: linear-gradient(130deg, #ffffff 12%, #f1f8f8 100%);
+            box-shadow: 0 12px 32px rgba(20, 50, 75, 0.045);
+        }
+
+        .overview-empty h3 {
+            margin: 0 0 0.45rem;
+            color: var(--sw-ink);
+            font-size: 1.25rem;
+        }
+
+        .overview-empty p {
+            margin: 0;
+            color: var(--sw-muted);
+            line-height: 1.65;
+        }
+
+        .overview-steps {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin-top: 1.3rem;
+        }
+
+        .overview-step {
+            padding: 1rem;
+            border: 1px solid var(--sw-border);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        .overview-step strong {
+            display: block;
+            margin-bottom: 0.3rem;
+            color: var(--sw-ink);
+        }
+
+        .overview-step span {
+            color: var(--sw-muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 700px) {
+            .block-container {
+                padding: 1.2rem 1rem 2rem;
+            }
+
+            .overview-steps {
+                grid-template-columns: 1fr;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -75,6 +222,7 @@ def show_dashboard_header(ai_enabled: bool = True):
     """Display the dashboard heading."""
 
     st.markdown(
+        '<div class="dashboard-eyebrow">YOUR HEALTH REPORT, MADE CLEARER</div>'
         '<div class="dashboard-title">🩺 SWASTHYA AI</div>',
         unsafe_allow_html=True,
     )
@@ -99,8 +247,29 @@ def show_overview(measurements: pd.DataFrame):
     )
 
     if measurements.empty:
-        st.info(
-            "Upload a medical report to view your dashboard statistics."
+        st.markdown(
+            """
+            <section class="overview-empty">
+                <h3>Make your lab results easier to understand</h3>
+                <p>Upload a laboratory report to extract measurements, review
+                the results in one place, and compare reports over time.</p>
+                <div class="overview-steps">
+                    <div class="overview-step">
+                        <strong>1. Add a report</strong>
+                        <span>Choose a PDF or a clear image of your report.</span>
+                    </div>
+                    <div class="overview-step">
+                        <strong>2. Review results</strong>
+                        <span>Check extracted values against the original report.</span>
+                    </div>
+                    <div class="overview-step">
+                        <strong>3. Track changes</strong>
+                        <span>Compare results from two report dates.</span>
+                    </div>
+                </div>
+            </section>
+            """,
+            unsafe_allow_html=True,
         )
         return
 
