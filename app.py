@@ -4,6 +4,7 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
 import io
 from datetime import datetime
@@ -31,13 +32,18 @@ from src.report_extractor import extract_measurements
 from src.report_comparison import compare_reports
 
 st.set_page_config(page_title="SWASTHYA AI", page_icon="🩺", layout="wide")
+try:
+    AI_ENABLED = str(st.secrets.get("AI_ENABLED", "true")).lower() == "true"
+except StreamlitSecretNotFoundError:
+    AI_ENABLED = True
+
 apply_dashboard_style()
 show_dashboard_header()
 
-page = st.sidebar.radio(
-    "Navigation",
-    ["Overview", "Report Analysis", "Report Comparison", "AI Assistant"],
-)
+pages = ["Overview", "Report Analysis", "Report Comparison"]
+if AI_ENABLED:
+    pages.append("AI Assistant")
+page = st.sidebar.radio("Navigation", pages)
 st.sidebar.caption("Educational assistance only. Not a medical diagnosis.")
 
 
@@ -239,20 +245,21 @@ elif page == "Report Analysis":
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.download_button("📥 Download CSV", df.to_csv(index=False).encode("utf-8"), "extracted_medical_data.csv", "text/csv")
 
-            st.subheader("🤖 AI-Powered Medical Explanation")
-            lang = st.selectbox("Explanation language", ["English", "Hindi", "Marathi"], key="analysis_lang")
-            if st.button("Generate AI Explanation"):
-                try:
-                    with st.spinner("Generating explanation..."):
-                        explanation = explain_measurements(df, lang)
+            if AI_ENABLED:
+                st.subheader("🤖 AI-Powered Medical Explanation")
+                lang = st.selectbox("Explanation language", ["English", "Hindi", "Marathi"], key="analysis_lang")
+                if st.button("Generate AI Explanation"):
+                    try:
+                        with st.spinner("Generating explanation..."):
+                            explanation = explain_measurements(df, lang)
 
-                    st.session_state.analysis_explanation = explanation
+                        st.session_state.analysis_explanation = explanation
 
-                    st.markdown(explanation)
-                except (OllamaUnavailableError, OllamaModelUnavailableError) as e:
-                    st.error(str(e))
-                except Exception as e:
-                    st.error(f"Could not generate explanation: {e}")
+                        st.markdown(explanation)
+                    except (OllamaUnavailableError, OllamaModelUnavailableError) as e:
+                        st.error(str(e))
+                    except Exception as e:
+                        st.error(f"Could not generate explanation: {e}")
             pdf_data = generate_pdf_report(
                 measurements=df,
                 report_name=st.session_state.analysis_name,
@@ -301,7 +308,7 @@ elif page == "Report Comparison":
         st.download_button("📥 Download comparison CSV", result.to_csv(index=False).encode("utf-8"), "medical_report_comparison.csv", "text/csv")
         st.caption("Numerical changes do not automatically indicate improvement or deterioration.")
 
-elif page == "AI Assistant":
+elif page == "AI Assistant" and AI_ENABLED:
     st.subheader("💬 Chat with Your Medical Report")
     df = st.session_state.analysis_measurements
     if df.empty:
