@@ -56,10 +56,6 @@ page = st.sidebar.radio("Navigation", pages)
 st.sidebar.caption("Educational assistance only. Not a medical diagnosis.")
 
 
-def signature(upload):
-    return hashlib.sha256(upload.getvalue()).hexdigest() if upload else None
-
-
 def process_report_content(file_name, file_bytes):
     ext = file_name.rsplit(".", 1)[-1].lower()
     text = extract_document_text(file_bytes, ext)
@@ -237,10 +233,9 @@ elif page == "Report Analysis":
     st.subheader("🧪 Report Analysis")
     st.caption(
         "Upload a lab report to extract supported measurements, review the "
-        "results, and download a copy for your records. Uploaded files stay "
-        "on this app's server until deleted and are not encrypted at rest."
+        "results, and download a copy for your records. Saved reports are "
+        "encrypted at rest; connection security depends on the app's hosting."
     )
-    upload = st.file_uploader("Upload a laboratory report", type=["pdf", "png", "jpg", "jpeg"], key="analysis_upload")
     try:
         saved_reports = list_saved_reports(st.session_state.user_id)
     except Exception as e:
@@ -287,16 +282,51 @@ elif page == "Report Analysis":
                     st.error(f"Could not delete saved report: {e}")
                 else:
                     st.rerun()
-    if upload:
-        sig = signature(upload)
+    upload_option = "upload_new"
+    saved_report_by_id = {report["id"]: report for report in saved_reports}
+    report_source = st.selectbox(
+        "Report to analyze",
+        [upload_option, *saved_report_by_id],
+        format_func=lambda report_id: (
+            "Upload a new report"
+            if report_id == upload_option
+            else saved_report_by_id[report_id]["filename"]
+        ),
+        key="analysis_report_source",
+    )
+    upload = None
+    report_data = None
+    if report_source == upload_option:
+        upload = st.file_uploader(
+            "Upload a laboratory report",
+            type=["pdf", "png", "jpg", "jpeg"],
+            key="analysis_upload",
+        )
+        if upload:
+            report_data = (upload.name, upload.getvalue())
+    else:
         try:
-            save_report(
+            report_data = get_saved_report(
                 st.session_state.user_id,
-                upload.name,
-                upload.getvalue(),
+                report_source,
             )
         except Exception as e:
-            st.error(f"Could not save uploaded report: {e}")
+            st.error(f"Could not load saved report: {e}")
+        if report_data is None:
+            st.error("The selected saved report is unavailable.")
+
+    if report_data:
+        report_name, report_bytes = report_data
+        sig = hashlib.sha256(report_bytes).hexdigest()
+        if upload:
+            try:
+                save_report(
+                    st.session_state.user_id,
+                    report_name,
+                    report_bytes,
+                )
+            except Exception as e:
+                st.error(f"Could not save uploaded report: {e}")
         if (
             st.session_state.get("analysis_signature") != sig
             or st.session_state.analysis_measurements.empty
@@ -309,14 +339,14 @@ elif page == "Report Analysis":
             st.session_state.chat_messages = []
             try:
                 with st.spinner("Extracting report..."):
-                    text, df = process_report(upload)
+                    text, df = process_report_content(report_name, report_bytes)
             except Exception as e:
                 st.error(f"Could not process report: {e}")
             else:
                 st.session_state.analysis_signature = sig
                 st.session_state.analysis_text = text
                 st.session_state.analysis_measurements = df
-                st.session_state.analysis_name = upload.name
+                st.session_state.analysis_name = report_name
     df = st.session_state.analysis_measurements
     if not df.empty:
         with st.expander("View extracted report text"):

@@ -7,3 +7,4 @@ ollama
 pytesseract
 plotly
 reportlab
+cryptography

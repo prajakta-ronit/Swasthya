@@ -1,4 +1,5 @@
 import src.auth as auth
+from cryptography.fernet import Fernet
 
 
 def create_user(username):
@@ -16,6 +17,12 @@ def create_user(username):
 def configure_test_database(monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "DATA_DIR", tmp_path)
     monkeypatch.setattr(auth, "DB_PATH", tmp_path / "users.db")
+    monkeypatch.setattr(
+        auth.st,
+        "secrets",
+        {"REPORT_ENCRYPTION_KEY": Fernet.generate_key().decode("ascii")},
+    )
+    monkeypatch.delenv("SWASTHYA_REPORT_ENCRYPTION_KEY", raising=False)
     auth.initialize_database()
 
 
@@ -31,6 +38,15 @@ def test_saved_reports_are_persistent_and_deduplicated(monkeypatch, tmp_path):
     assert len(saved_reports) == 1
     assert saved_reports[0]["id"] == report_id
     assert saved_reports[0]["filename"] == "blood-test.pdf"
+    with auth.get_connection() as conn:
+        stored_filename, storage_key = conn.execute(
+            "SELECT filename, storage_key FROM reports WHERE id = ?",
+            (report_id,)
+        ).fetchone()
+    stored_file = (tmp_path / "uploads" / storage_key).read_bytes()
+    assert stored_filename.startswith(auth.ENCRYPTED_FILENAME_PREFIX)
+    assert stored_file.startswith(auth.ENCRYPTED_PREFIX)
+    assert b"report contents" not in stored_file
     assert auth.get_saved_report(user_id, report_id) == (
         "blood-test.pdf",
         b"report contents",
@@ -65,3 +81,43 @@ def test_login_verification_includes_user_id(monkeypatch, tmp_path):
         user_id,
         "alice",
     )
+
+
+def test_legacy_plaintext_reports_are_encrypted_on_listing(monkeypatch, tmp_path):
+    configure_test_database(monkeypatch, tmp_path)
+    user_id = create_user("alice")
+    storage_key = "legacy.upload"
+    plaintext = b"old report contents"
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / storage_key).write_bytes(plaintext)
+    with auth.get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO reports
+            (id, user_id, filename, storage_key, sha256)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("legacy-report", user_id, "legacy.pdf", storage_key, "legacyhash")
+        )
+
+    assert auth.list_saved_reports(user_id)[0]["filename"] == "legacy.pdf"
+    encrypted_file = (tmp_path / "uploads" / storage_key).read_bytes()
+    assert encrypted_file.startswith(auth.ENCRYPTED_PREFIX)
+    assert plaintext not in encrypted_file
+    assert auth.get_saved_report(user_id, "legacy-report") == (
+        "legacy.pdf",
+        plaintext,
+    )
+
+
+def test_saving_fails_closed_without_encryption_key(monkeypatch, tmp_path):
+    configure_test_database(monkeypatch, tmp_path)
+    user_id = create_user("alice")
+    monkeypatch.setattr(auth.st, "secrets", {})
+
+    try:
+        auth.save_report(user_id, "report.pdf", b"report")
+    except RuntimeError as error:
+        assert "Report encryption is not configured" in str(error)
+    else:
+        raise AssertionError("Saving without an encryption key must fail.")

@@ -5,7 +5,13 @@ import hashlib
 import secrets
 import hmac
 import uuid
+import os
+import tempfile
+import binascii
 from pathlib import Path
+
+from cryptography.fernet import Fernet, InvalidToken
+from streamlit.errors import StreamlitSecretNotFoundError
 
 # Database configuration
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,6 +19,8 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 DB_PATH = DATA_DIR / "users.db"
+ENCRYPTED_PREFIX = b"SWASTHYA_ENC_V1:"
+ENCRYPTED_FILENAME_PREFIX = "SWASTHYA_ENC_V1:"
 
 def get_connection():
     connection = sqlite3.connect(DB_PATH)
@@ -42,6 +50,80 @@ def initialize_database():
             )
         """)
 
+def get_report_fernet():
+    try:
+        key = st.secrets.get("REPORT_ENCRYPTION_KEY")
+    except StreamlitSecretNotFoundError:
+        key = None
+    key = key or os.environ.get("SWASTHYA_REPORT_ENCRYPTION_KEY")
+    if not key:
+        raise RuntimeError(
+            "Report encryption is not configured. Set REPORT_ENCRYPTION_KEY "
+            "in Streamlit secrets or SWASTHYA_REPORT_ENCRYPTION_KEY in the "
+            "environment. Generate a key with "
+            "Fernet.generate_key().decode(). Keep a secure backup; losing "
+            "the key makes saved reports unrecoverable."
+        )
+    try:
+        return Fernet(key.encode("ascii") if isinstance(key, str) else key)
+    except (binascii.Error, TypeError, ValueError) as error:
+        raise RuntimeError(
+            "The report encryption key is invalid. Generate a Fernet key "
+            "with Fernet.generate_key().decode()."
+        ) from error
+
+def _write_encrypted_file(file_path, content):
+    encrypted = ENCRYPTED_PREFIX + get_report_fernet().encrypt(content)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=file_path.parent,
+            prefix=f".{file_path.name}.",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(encrypted)
+        temp_path.replace(file_path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+def _ensure_encrypted_file(file_path):
+    content = file_path.read_bytes()
+    if content.startswith(ENCRYPTED_PREFIX):
+        return
+    _write_encrypted_file(file_path, content)
+
+def _read_report_file(file_path):
+    content = file_path.read_bytes()
+    if not content.startswith(ENCRYPTED_PREFIX):
+        _write_encrypted_file(file_path, content)
+        return content
+    try:
+        return get_report_fernet().decrypt(content[len(ENCRYPTED_PREFIX):])
+    except InvalidToken as error:
+        raise RuntimeError(
+            "Could not decrypt this report. The encryption key may have "
+            "changed or the stored file may be damaged."
+        ) from error
+
+def _encrypt_filename(filename, fernet):
+    return ENCRYPTED_FILENAME_PREFIX + fernet.encrypt(
+        filename.encode("utf-8")
+    ).decode("ascii")
+
+def _decrypt_filename(filename, fernet):
+    if not filename.startswith(ENCRYPTED_FILENAME_PREFIX):
+        return filename
+    try:
+        encrypted = filename[len(ENCRYPTED_FILENAME_PREFIX):].encode("ascii")
+        return fernet.decrypt(encrypted).decode("utf-8")
+    except (InvalidToken, UnicodeDecodeError, ValueError) as error:
+        raise RuntimeError(
+            "Could not decrypt a saved report filename. The encryption key "
+            "may have changed or the database may be damaged."
+        ) from error
+
 def get_user_id(username):
     with get_connection() as conn:
         user = conn.execute(
@@ -54,13 +136,24 @@ def save_report(user_id, filename, file_bytes):
     initialize_database()
     content = bytes(file_bytes)
     digest = hashlib.sha256(content).hexdigest()
+    fernet = get_report_fernet()
 
     with get_connection() as conn:
         existing = conn.execute(
-            "SELECT id FROM reports WHERE user_id = ? AND sha256 = ?",
+            """
+            SELECT id, filename, storage_key
+            FROM reports
+            WHERE user_id = ? AND sha256 = ?
+            """,
             (user_id, digest)
         ).fetchone()
         if existing:
+            _ensure_encrypted_file(DATA_DIR / "uploads" / existing[2])
+            if not existing[1].startswith(ENCRYPTED_FILENAME_PREFIX):
+                conn.execute(
+                    "UPDATE reports SET filename = ? WHERE id = ?",
+                    (_encrypt_filename(existing[1], fernet), existing[0])
+                )
             return existing[0]
 
     report_id = uuid.uuid4().hex
@@ -70,7 +163,7 @@ def save_report(user_id, filename, file_bytes):
     file_path = reports_dir / storage_key
 
     try:
-        file_path.write_bytes(content)
+        _write_encrypted_file(file_path, content)
         with get_connection() as conn:
             conn.execute(
                 """
@@ -78,7 +171,13 @@ def save_report(user_id, filename, file_bytes):
                 (id, user_id, filename, storage_key, sha256)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (report_id, user_id, Path(filename).name, storage_key, digest)
+                (
+                    report_id,
+                    user_id,
+                    _encrypt_filename(Path(filename).name, fernet),
+                    storage_key,
+                    digest,
+                )
             )
     except Exception:
         file_path.unlink(missing_ok=True)
@@ -88,20 +187,32 @@ def save_report(user_id, filename, file_bytes):
 
 def list_saved_reports(user_id):
     initialize_database()
+    fernet = get_report_fernet()
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, filename, uploaded_at
+            SELECT id, filename, uploaded_at, storage_key
             FROM reports
             WHERE user_id = ?
             ORDER BY uploaded_at DESC, rowid DESC
             """,
             (user_id,)
         ).fetchall()
-    return [
-        {"id": row[0], "filename": row[1], "uploaded_at": row[2]}
-        for row in rows
-    ]
+        reports = []
+        for report_id, filename, uploaded_at, storage_key in rows:
+            _ensure_encrypted_file(DATA_DIR / "uploads" / storage_key)
+            if not filename.startswith(ENCRYPTED_FILENAME_PREFIX):
+                filename = _encrypt_filename(filename, fernet)
+                conn.execute(
+                    "UPDATE reports SET filename = ? WHERE id = ?",
+                    (filename, report_id)
+                )
+            reports.append({
+                "id": report_id,
+                "filename": _decrypt_filename(filename, fernet),
+                "uploaded_at": uploaded_at,
+            })
+    return reports
 
 def get_saved_report(user_id, report_id):
     initialize_database()
@@ -118,8 +229,9 @@ def get_saved_report(user_id, report_id):
         return None
 
     filename, storage_key = report
+    fernet = get_report_fernet()
     file_path = DATA_DIR / "uploads" / storage_key
-    return filename, file_path.read_bytes()
+    return _decrypt_filename(filename, fernet), _read_report_file(file_path)
 
 def delete_saved_report(user_id, report_id):
     initialize_database()

@@ -10,6 +10,7 @@ User=swasthya
 Group=swasthya
 WorkingDirectory=/opt/swasthya
 Environment=HOME=/var/lib/swasthya
+EnvironmentFile=-/etc/swasthya/swasthya.env
 Environment=OLLAMA_HOST=http://127.0.0.1:11434
 Environment=OLLAMA_MODEL=llama3.2:3b
 Environment=PYTHONUNBUFFERED=1

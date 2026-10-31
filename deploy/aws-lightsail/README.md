@@ -40,6 +40,32 @@ localhost; do not make its API publicly accessible.
 
 ## 3. Start Streamlit with systemd
 
+Before starting the app, configure the encryption key used for saved report
+files and filenames. Generate a Fernet key:
+
+```bash
+/opt/swasthya/venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Create a root-only environment file and add the generated key. Do not commit
+this key or include it in backups alongside the encrypted reports:
+
+```bash
+sudo install -d -o root -g root -m 700 /etc/swasthya
+sudo install -o root -g root -m 600 /dev/null /etc/swasthya/swasthya.env
+sudo nano /etc/swasthya/swasthya.env
+```
+
+Add this line, replacing the value with the generated key:
+
+```text
+SWASTHYA_REPORT_ENCRYPTION_KEY=your-generated-fernet-key
+```
+
+Back up the key separately in a secure password manager or secret manager.
+Losing or changing it makes saved reports unrecoverable. Existing plaintext
+reports are encrypted when the account's saved reports are next opened.
+
 Install the included service file:
 
 ```bash
